@@ -152,7 +152,7 @@ Actual Pavement      780    5,220
 6.2 Observations
 -----------------
 - Ground truth integration successful - enables true performance evaluation
-- 83.66% accuracy is realistic baseline (vs inflated 99%+ from k-means agreement)
+- 67.2% accuracy is realistic baseline for this challenging classification task
 - False positives (1,181) suggest need for better non-pavement discrimination
 - False negatives (780) indicate conservative filtering or missed pavement areas
 - Geometric filtering helps but needs refinement for optimal balance
