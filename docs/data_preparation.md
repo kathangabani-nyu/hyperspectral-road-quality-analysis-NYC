@@ -3,8 +3,10 @@
 ## Required Data
 
 ### 1. Hyperspectral Data
+- **Note:** This project was developed using NYU TuckMapping dataset (288 bands). This dataset is classified and requires special permissions granted only to NYU researchers. This repository does not provide access to this dataset.
 - Format: ERDAS Imagine (.pix) or GeoTIFF (.tif)
 - Must contain multiple spectral bands (288 bands recommended)
+- Users must provide their own hyperspectral data
 - Update path in `src/advanced_config.py`
 
 ### 2. NYC Land Cover Data

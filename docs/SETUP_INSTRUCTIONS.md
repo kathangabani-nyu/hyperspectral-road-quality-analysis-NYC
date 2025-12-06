@@ -18,6 +18,7 @@ pip install -r requirements_research.txt
 ### Required Files:
 
 1. **Hyperspectral data**: Provide your own hyperspectral imagery file
+   - **Note:** This project was developed using NYU TuckMapping dataset, which is classified and restricted to NYU researchers only. This repository does not provide access to this dataset.
    - Format: ERDAS Imagine (.pix) or GeoTIFF (.tif)
    - Must contain multiple spectral bands
    - Update the path in `src/advanced_config.py` (HYPERSPECTRAL_PATH)

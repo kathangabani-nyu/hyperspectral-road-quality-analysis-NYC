@@ -21,7 +21,7 @@ large-scale infrastructure condition assessment.
 
 2.1 Data Sources
 ----------------
-- Primary: 288-band hyperspectral imagery
+- Primary: 288-band hyperspectral imagery (NYU TuckMapping dataset - restricted access, NYU researchers only)
 - Ground Truth: NYC Land Cover Raster Data (2017) - 6-inch resolution
   - Derived from LiDAR point clouds and orthoimagery
   - 8-class land cover classification including Roads and Other Impervious
