@@ -1,6 +1,6 @@
 # Hyperspectral Road Quality Analysis - NYC
 
-A research-grade machine learning pipeline for pavement classification using hyperspectral imagery. This system achieves 65-70% classification accuracy on the NYU TuckMapping Brooklyn hyperspectral dataset (288 spectral bands) using LiDAR-derived ground truth validation.
+A research-grade machine learning pipeline for pavement classification using hyperspectral imagery. This system achieves 65-70% classification accuracy on the    hyperspectral dataset (288 spectral bands) using LiDAR-derived ground truth validation.
 
 ## Project Structure
 
@@ -55,7 +55,7 @@ See `requirements.txt` (basic) or `requirements_research.txt` (full research fea
 
 1. Clone the repository:
 ```bash
-git clone https://github.com/kathangabani-nyu/hyperspectral-road-quality-analysis-NYC.git
+git clone https://github.com/kathangabani-
 cd hyperspectral-road-quality-analysis-NYC
 ```
 
@@ -93,7 +93,7 @@ The enhanced pipeline includes:
 ## Data
 
 This project uses:
-- NYU TuckMapping hyperspectral imagery (288 bands)
+-   hyperspectral imagery (288 bands)
 - NYC Land Cover Raster Data (2017) - 6-inch resolution LiDAR-derived ground truth
 
 Note: Large data files are excluded from the repository. See `docs/SETUP_INSTRUCTIONS.md` for data acquisition details.
@@ -135,7 +135,7 @@ If you use this code in your research, please cite:
 
 ## Acknowledgments
 
-- NYU TuckMapping dataset
+-   dataset
 - NYC Department of Information Technology and Telecommunications (DoITT) for Land Cover data
 - Research collaborators and advisors
 

@@ -4,7 +4,7 @@
 
 ### 1. Hyperspectral Data
 The hyperspectral data files are in Google Drive:
-- Files: `NYU_TuckMapping_20190511_Mission1_NE-SW_288Bands.*`
+- Files: `
 - Format: PCI Geomatica (.pix)
 - You need the .pix and .hdr files
 
@@ -12,7 +12,7 @@ The hyperspectral data files are in Google Drive:
 Download from NYC Open Data:
 1. Go to: https://data.cityofnewyork.us/Environment/Land-Cover-Raster-Data-2017-6in-Resolution/he6d-2qns/about_data
 2. Click "Export" or "Download"
-3. Download the Brooklyn area or full city dataset
+3. Download the  area or full city dataset
 4. Look for the following file formats:
    - GeoTIFF (.tif)
    - Or other raster formats
@@ -66,10 +66,10 @@ VIP/
 ├── requirements.txt
 ├── README.md
 ├── data/
-│   ├── NYU_TuckMapping_20190511_Mission1_NE-SW_288Bands.pix
-│   ├── NYU_TuckMapping_20190511_Mission1_NE-SW_288Bands.pix.hdr
-│   ├── NYU_TuckMapping_20190511_Mission1_NE-SW_288Bands.pix.aux.xml
-│   └── land_cover_brooklyn.tif
+│   ├── 
+│   ├── 
+│   ├── 
+│   └── land_cover_
 └── outputs/
     ├── pavement_classification_map.tif
     └── pavement_classification_results.png

@@ -16,14 +16,14 @@ pip install -r requirements.txt
 ## Data Setup
 
 ### Required Files:
-1. **Hyperspectral data**: `NYU_TuckMapping_20190511_Mission1_NE-SW_288Bands.pix`
+1. **Hyperspectral data**: `
    - Download from Google Drive: https://drive.google.com/drive/u/0/folders/1PoHgH77VZTlXPSB-esOxD8XMSKeO8VfZ
    - Place in your project directory or specify path in the notebook
 
-2. **Land Cover data**: Brooklyn land cover raster from NYC Open Data
+2. **Land Cover data**:  land cover raster from NYC Open Data
    - Download from: https://data.cityofnewyork.us/Environment/Land-Cover-Raster-Data-2017-6in-Resolution/he6d-2qns/about_data
    - Should be in GeoTIFF format (.tif)
-   - Name it `land_cover_brooklyn.tif` or update the path in the code
+   - Name it `land_cover_ or update the path in the code
 
 ### Important: Identify Pavement Codes
 Before running, you MUST identify the pavement class codes:
