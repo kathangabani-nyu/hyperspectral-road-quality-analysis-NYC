@@ -121,22 +121,6 @@ Results are saved to `outputs_research/` directory (excluded from git).
 - `docs/QUICK_START.md` - Quick start guide
 - `docs/DOCUMENTATION_INDEX.md` - Full documentation index
 
-## Contributing
-
-This is a research project. For questions or contributions, please open an issue or contact the repository maintainers.
-
-## License
-
-[Specify license if applicable]
-
-## Citation
-
-If you use this code in your research, please cite:
-
-```
-[Add citation information]
-```
-
 ## Acknowledgments
 
 - NYU TuckMapping hyperspectral dataset (restricted access, NYU researchers only)
