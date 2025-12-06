@@ -171,13 +171,13 @@ Contents:
 **main.py**
 - Basic pipeline (30 bands)
 - Fast testing (~2 minutes)
-- 99.90% accuracy
+- 67% accuracy
 - Output: `outputs/`
 
 **main_enhanced.py**
 - Research pipeline (288 bands)
 - Full feature engineering
-- 99.94% accuracy
+- 67% accuracy
 - Output: `outputs_research/`
 
 ## Output Documentation

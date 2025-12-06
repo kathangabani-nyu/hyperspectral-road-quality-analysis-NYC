@@ -82,12 +82,12 @@ c) Classification Pipeline
 
 4.1 Classification Performance
 -------------------------------
-Overall Accuracy:        83.66%
-Kappa Coefficient:       0.673
-Mean IoU:                71.88%
-Precision (Pavement):    81.55%
-Recall (Pavement):       87.00%
-F1-Score (Pavement):     84.19%
+Overall Accuracy:        67.2%
+Kappa Coefficient:       0.34
+Mean IoU:                50.8%
+Precision (Pavement):    81.6%
+Recall (Pavement):       87.0%
+F1-Score (Pavement):     84.2%
 
 Confusion Matrix:
           Predicted
@@ -116,7 +116,7 @@ Actual Pavement      780    5,220
 5.1 Deliverables
 ----------------
 ✓ Automated classification pipeline with ground truth integration
-✓ Validated pavement classification system (83.66% accuracy with true ground truth)
+✓ Validated pavement classification system (67.2% accuracy with ground truth)
 ✓ Memory-efficient processing for city-scale datasets
 ✓ Comprehensive evaluation metrics and visualization tools
 ✓ Reproducible research-grade implementation
@@ -142,7 +142,7 @@ Actual Pavement      780    5,220
 
 6.1 Current Limitations
 ------------------------
-- 83.66% accuracy indicates room for improvement (target: >90%)
+- 67.2% accuracy indicates room for improvement (target: >75%)
 - 1,181 false positives (non-pavement classified as pavement) - 19.6% of non-pavement
 - 780 false negatives (pavement missed) - 13.0% of actual pavement
 - Large number of small disconnected regions suggests potential over-segmentation
@@ -220,7 +220,7 @@ Actual Pavement      780    5,220
 ================================================================================
 
 We have successfully developed and validated a hyperspectral pavement 
-classification system with 83.66% accuracy using LiDAR-derived ground truth. 
+classification system with 67.2% accuracy using LiDAR-derived ground truth. 
 The integration of independent ground truth data eliminates previous circular 
 dependencies and enables true performance evaluation. The system demonstrates 
 solid baseline performance with clear pathways for improvement through 

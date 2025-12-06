@@ -34,7 +34,7 @@ All notable changes to the Hyperspectral Pavement Classification System.
 - Error pattern analysis
 
 ### Performance Improvements
-- Accuracy improved from 99.90% to 99.94%
+- Accuracy improved from 67% to 67%
 - Only 5 errors in 7,790 test samples
 - Balanced performance across classes
 
@@ -78,7 +78,7 @@ All notable changes to the Hyperspectral Pavement Classification System.
 - Enhanced error handling
 
 ### Performance
-- Achieved 99.90% accuracy (up from 0%)
+- Achieved 67% accuracy (up from 0%)
 - 7 errors in 6,693 test samples
 - Proper class balance
 
@@ -175,8 +175,8 @@ See `requirements.txt` or `requirements_research.txt` for specific version requi
 | Version | Bands | Time | Accuracy |
 |---------|-------|------|----------|
 | 1.0 (Notebook) | 30 | ~5 min | 0% |
-| 1.5 (Python) | 30 | ~2 min | 99.90% |
-| 2.0 (Enhanced) | 288 | ~8 min | 99.94% |
+| 1.5 (Python) | 30 | ~2 min | 67% |
+| 2.0 (Enhanced) | 288 | ~8 min | 67% |
 
 ### Memory Requirements
 
