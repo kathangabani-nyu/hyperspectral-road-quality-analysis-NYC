@@ -1,0 +1,89 @@
+# Python
+__pycache__/
+*.py[cod]
+*$py.class
+*.so
+.Python
+build/
+develop-eggs/
+dist/
+downloads/
+eggs/
+.eggs/
+lib/
+lib64/
+parts/
+sdist/
+var/
+wheels/
+*.egg-info/
+.installed.cfg
+*.egg
+
+# Virtual Environment
+venv/
+env/
+ENV/
+.venv
+
+# IDE
+.vscode/
+.idea/
+*.swp
+*.swo
+*~
+.DS_Store
+
+# Jupyter Notebook
+.ipynb_checkpoints/
+*.ipynb_checkpoints
+
+# Project specific - Large data files
+*.pix
+*.img
+*.ige
+*.tif
+*.tiff
+*.aux.xml
+*.rde
+*.rrd
+*.vat.*
+*.xml
+
+# Output directories
+outputs/
+outputs_research/
+*.log
+pipeline_run.log
+pipeline_output.log
+full_pipeline_output.log
+
+# OneDrive
+~$*
+
+# Temporary files
+*.tmp
+*.temp
+*.bak
+*.cache
+
+# OS
+Thumbs.db
+.DS_Store
+
+# Test files
+test_*.py
+*_test.py
+
+# Documentation builds
+docs/_build/
+
+# Model files (large)
+*.pkl
+*.h5
+*.hdf5
+*.model
+
+# Land Cover Data (large external dataset)
+"Land Cover Raster Data (2017) – 6in Resolution/"
+
