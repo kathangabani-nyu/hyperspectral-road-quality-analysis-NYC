@@ -58,6 +58,7 @@ outputs_research/
 pipeline_run.log
 pipeline_output.log
 full_pipeline_output.log
+bounds.txt
 
 # OneDrive
 ~$*
