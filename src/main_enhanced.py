@@ -74,13 +74,14 @@ def main():
     # ========================================================================
     # STEP 3.5: Apply Spectral Masking (filter obvious non-pavement)
     # ========================================================================
+    filter_stats = None
     if config.USE_SPECTRAL_MASKING:
         if config.VERBOSE:
             print(f"\n{'='*60}")
             print("STEP 3.5: SPECTRAL MASKING")
             print(f"{'='*60}")
         
-        spectral_mask = spectral_masking.create_spectral_mask(X_valid, hyperspectral_data)
+        spectral_mask, filter_stats = spectral_masking.create_spectral_mask(X_valid, hyperspectral_data)
         
         # Update valid_mask to include spectral masking
         valid_mask_combined = valid_mask.copy()
@@ -88,6 +89,45 @@ def main():
         
         print(f"After spectral masking: {spectral_mask.sum()} pixels "
               f"({100*spectral_mask.sum()/X_valid.shape[0]:.1f}% of original)")
+        
+        # Validate filtering results
+        min_pixels = int(X_valid.shape[0] * getattr(config, 'MIN_PIXELS_TO_KEEP', 0.01))
+        if spectral_mask.sum() < min_pixels:
+            print(f"\nWARNING: Only {spectral_mask.sum()} pixels remain after filtering")
+            print(f"  Minimum recommended: {min_pixels} pixels")
+            print(f"  Consider using 'conservative' filtering strategy")
+            if hasattr(config, 'AUTO_ADJUST_FILTERING') and config.AUTO_ADJUST_FILTERING:
+                print("  Auto-adjusting to conservative strategy...")
+                # Note: Would need to re-run with conservative strategy
+                # For now, just warn the user
+        
+        # Analyze filtered pixels
+        if config.VERBOSE:
+            try:
+                import spectral_analysis
+                analysis = spectral_analysis.analyze_filtered_pixels(
+                    X_valid, spectral_mask, hyperspectral_data, rgb_composite
+                )
+                
+                # Visualize spectral filtering
+                try:
+                    spectral_analysis.visualize_spectral_filtering(
+                        rgb_composite, valid_mask, valid_mask_combined,
+                        config.FIGURES_DIR + '/spectral_filtering_analysis.png',
+                        height=height, width=width
+                    )
+                except Exception as e:
+                    if config.VERBOSE:
+                        print(f"Warning: Could not create spectral filtering visualization: {e}")
+                
+                # Validate filtering quality
+                validation = spectral_analysis.validate_filtering_quality(
+                    spectral_mask,
+                    min_pixels_ratio=getattr(config, 'MIN_PIXELS_TO_KEEP', 0.01)
+                )
+            except Exception as e:
+                if config.VERBOSE:
+                    print(f"Warning: Could not run spectral analysis: {e}")
     else:
         # No spectral masking - use all valid pixels
         valid_mask_combined = valid_mask
@@ -149,11 +189,25 @@ def main():
         try:
             import ground_truth_loader
             
-            # Calculate hyperspectral bounds for alignment
+            # Calculate hyperspectral bounds for alignment using all four corners
             from rasterio.transform import xy
             try:
-                minx, miny = xy(transform, 0, height)
-                maxx, maxy = xy(transform, width, 0)
+                # Get all four corners to ensure correct min/max calculation
+                corners = [
+                    xy(transform, 0, 0),           # Top-left
+                    xy(transform, width, 0),       # Top-right
+                    xy(transform, 0, height),      # Bottom-left
+                    xy(transform, width, height)   # Bottom-right
+                ]
+                
+                x_coords = [c[0] for c in corners]
+                y_coords = [c[1] for c in corners]
+                
+                minx = float(min(x_coords))
+                maxx = float(max(x_coords))
+                miny = float(min(y_coords))
+                maxy = float(max(y_coords))
+                
                 hyperspectral_bounds = (minx, miny, maxx, maxy)
             except Exception as e:
                 if config.VERBOSE:
@@ -471,6 +525,149 @@ def main():
         print("Saving empty map for debugging.")
     else:
         # ========================================================================
+        # STEP 14.5: Height-Based Filtering (LiDAR elevation)
+        # ========================================================================
+        if hasattr(config, 'USE_LIDAR_HEIGHT_FILTERING') and config.USE_LIDAR_HEIGHT_FILTERING:
+            print(f"\n{'='*70}")
+            print("STEP 14.5: HEIGHT-BASED FILTERING (LiDAR)")
+            print(f"Threshold: {config.HEIGHT_THRESHOLD_CM} cm")
+            print(f"{'='*70}")
+            
+            try:
+                import lidar_elevation_loader
+                
+                # Calculate hyperspectral bounds using all four corners
+                from rasterio.transform import xy
+                try:
+                    # Get all four corners to ensure correct min/max calculation
+                    corners = [
+                        xy(transform, 0, 0),           # Top-left
+                        xy(transform, width, 0),       # Top-right
+                        xy(transform, 0, height),      # Bottom-left
+                        xy(transform, width, height)   # Bottom-right
+                    ]
+                    
+                    x_coords = [c[0] for c in corners]
+                    y_coords = [c[1] for c in corners]
+                    
+                    minx = float(min(x_coords))
+                    maxx = float(max(x_coords))
+                    miny = float(min(y_coords))
+                    maxy = float(max(y_coords))
+                    
+                    hyperspectral_bounds = (minx, miny, maxx, maxy)
+                except Exception as e:
+                    if config.VERBOSE:
+                        print(f"Warning: Could not calculate bounds from transform: {e}")
+                    hyperspectral_bounds = None
+                
+                # Load and align LiDAR elevation data
+                dem, height_offset, is_similar_height = lidar_elevation_loader.load_and_align_lidar_elevation(
+                    config.LIDAR_DIR,
+                    profile,
+                    transform,
+                    hyperspectral_bounds=hyperspectral_bounds,
+                    rasterize_method=getattr(config, 'LIDAR_RASTERIZE_METHOD', 'mean'),
+                    height_threshold_cm=getattr(config, 'HEIGHT_THRESHOLD_CM', 10.0)
+                )
+                
+                # Apply height-based filtering
+                # Keep pixels that are classified as pavement AND have similar height (< threshold)
+                # Remove pixels with large height differences (likely objects like fire hydrants, plants, etc.)
+                before_count = classification_map.sum()
+                
+                # Only filter pixels that are currently classified as pavement
+                pavement_pixels = classification_map.astype(bool)
+                
+                # Create valid mask for comparison (where both DEM and height offset are valid)
+                valid_dem = ~np.isnan(dem)
+                valid_height_offset = ~np.isnan(height_offset)
+                valid_for_comparison = valid_dem & valid_height_offset
+                
+                # Use percentile-based filtering if enabled, otherwise use absolute threshold
+                if getattr(config, 'USE_PERCENTILE_FILTERING', False):
+                    # Calculate percentile threshold based on height offsets of pavement pixels
+                    pavement_valid = pavement_pixels & valid_for_comparison
+                    pavement_height_offsets = height_offset[pavement_valid]
+                    if len(pavement_height_offsets) > 0:
+                        percentile_threshold = np.percentile(np.abs(pavement_height_offsets), 
+                                                             getattr(config, 'HEIGHT_PERCENTILE_THRESHOLD', 95))
+                        print(f"  Using percentile-based filtering: {getattr(config, 'HEIGHT_PERCENTILE_THRESHOLD', 95)}th percentile = {percentile_threshold*100:.1f} cm")
+                        # Keep pixels below percentile threshold
+                        is_similar_height_pavement = np.abs(height_offset) < percentile_threshold
+                        is_similar_height_pavement[~valid_for_comparison] = False
+                    else:
+                        is_similar_height_pavement = is_similar_height
+                else:
+                    is_similar_height_pavement = is_similar_height
+                
+                # Remove pavement pixels with large height differences
+                # (These are likely objects on the sidewalk, not the sidewalk itself)
+                large_height_diff = ~is_similar_height_pavement
+                classification_map[pavement_pixels & large_height_diff] = 0
+                
+                after_count = classification_map.sum()
+                removed_count = before_count - after_count
+                
+                print(f"\nHeight-based filtering results:")
+                print(f"  Before: {before_count} pavement pixels")
+                print(f"  After: {after_count} pavement pixels")
+                print(f"  Removed: {removed_count} pixels ({100*removed_count/max(before_count,1):.1f}% reduction)")
+                print(f"  Threshold: {config.HEIGHT_THRESHOLD_CM} cm")
+                
+                # Save DEM and height offset for visualization
+                if hasattr(config, 'RESULTS_DIR'):
+                    import os
+                    dem_file = os.path.join(config.RESULTS_DIR, "lidar_dem.tif")
+                    height_offset_file = os.path.join(config.RESULTS_DIR, "height_offset.tif")
+                    
+                    # Save DEM
+                    with rasterio.open(
+                        dem_file, 'w',
+                        driver='GTiff',
+                        height=height,
+                        width=width,
+                        count=1,
+                        dtype=dem.dtype,
+                        crs=profile['crs'],
+                        transform=transform,
+                        compress='lzw'
+                    ) as dst:
+                        dst.write(dem, 1)
+                    
+                    # Save height offset
+                    with rasterio.open(
+                        height_offset_file, 'w',
+                        driver='GTiff',
+                        height=height,
+                        width=width,
+                        count=1,
+                        dtype=height_offset.dtype,
+                        crs=profile['crs'],
+                        transform=transform,
+                        compress='lzw'
+                    ) as dst:
+                        dst.write(height_offset, 1)
+                    
+                    print(f"  DEM saved to: {dem_file}")
+                    print(f"  Height offset saved to: {height_offset_file}")
+                
+            except Exception as e:
+                print(f"\nERROR: Height-based filtering failed: {e}")
+                import traceback
+                if config.VERBOSE:
+                    traceback.print_exc()
+                print("\nPossible causes:")
+                print("  1. LiDAR files don't cover the target area")
+                print("  2. Coordinate system mismatch between LiDAR and hyperspectral data")
+                print("  3. LiDAR files are in a different location than expected")
+                print("\nTroubleshooting:")
+                print(f"  - Check that LiDAR files in {config.LIDAR_DIR} cover the area")
+                print(f"  - Verify coordinate systems match (hyperspectral: {profile.get('crs', 'unknown')})")
+                print("  - Try running with VERBOSE=True to see detailed diagnostics")
+                print("\nContinuing without height-based filtering...")
+        
+        # ========================================================================
         # STEP 15: Multi-Stage Filtering (Robust Approach)
         # ========================================================================
         print(f"\n{'='*70}")
@@ -483,17 +680,16 @@ def main():
         labeled, n_regions = label(classification_map)
         
         print(f"Found {n_regions} regions")
+        print(f"Pixels before filtering: {classification_map.sum()}")
         
         if n_regions > 0:
-            filtered_map = np.zeros_like(classification_map)
+            # Start with a copy of the classification map (preserve all pixels by default)
+            filtered_map = classification_map.copy()
             n_removed = 0
             
             for region_id in range(1, n_regions + 1):
                 region_mask = (labeled == region_id)
                 region_area = region_mask.sum()
-                
-                # Keep all regions by default
-                filtered_map[region_mask] = 1
                 
                 # Only remove very obvious rooftops: square, compact, isolated, medium size
                 if 300 <= region_area <= 2500:  # Medium size range
@@ -523,6 +719,8 @@ def main():
             
             classification_map = filtered_map
             print(f"After rooftop filtering: {classification_map.sum()} pixels (removed {n_removed} regions)")
+        else:
+            print(f"WARNING: No connected regions found! Keeping all {classification_map.sum()} pixels.")
     
     # Step 3: Optional sidewalk-specific refinement (DISABLED - too aggressive)
     # Sidewalk filtering removes everything, keeping disabled for now
@@ -566,6 +764,41 @@ def main():
             classification_map,
             kernel_size=kernel_size
         )
+    
+    # ========================================================================
+    # STEP 15.7: Sidewalk Signature Matching (Expand using Ground Truth)
+    # ========================================================================
+    if (hasattr(config, 'USE_SIDEWALK_SIGNATURE_MATCHING') and 
+        config.USE_SIDEWALK_SIGNATURE_MATCHING and 
+        land_cover_map is not None):
+        print(f"\n{'='*70}")
+        print("STEP 15.7: SIDEWALK SIGNATURE MATCHING")
+        print("Expanding sidewalk detection using ground truth signatures")
+        print(f"{'='*70}")
+        
+        try:
+            import sidewalk_detection
+            
+            # Expand classification map using signature matching
+            classification_map = sidewalk_detection.expand_sidewalk_by_signature_matching(
+                classification_map,
+                land_cover_map,
+                hyperspectral_data,
+                valid_mask_combined,
+                similarity_threshold=getattr(config, 'SIDEWALK_SIMILARITY_THRESHOLD', 0.85),
+                max_distance_pixels=getattr(config, 'SIDEWALK_MAX_DISTANCE', 50),
+                prefer_rectangular=True
+            )
+            
+            print(f"[OK] Sidewalk signature matching complete")
+            print(f"  Final pavement pixels: {classification_map.sum()}")
+            
+        except Exception as e:
+            print(f"ERROR: Sidewalk signature matching failed: {e}")
+            import traceback
+            if config.VERBOSE:
+                traceback.print_exc()
+            print("Continuing without signature matching expansion...")
     
     # Save
     print(f"\n{'='*70}")

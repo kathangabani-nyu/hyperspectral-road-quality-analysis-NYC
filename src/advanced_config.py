@@ -31,8 +31,8 @@ for dir_path in [OUTPUT_DIR, RESULTS_DIR, FIGURES_DIR, MODELS_DIR, ANALYSIS_DIR]
 # Test area size - optimized for best results
 TEST_SIZE_X = 800  # Larger area for maximum statistical validity
 TEST_SIZE_Y = 800
-START_X = 3200  # Different block: center region
-START_Y = 4000
+START_X = 2500  # Different block: try area with more sidewalks and roads
+START_Y = 3000
 
 # Hyperspectral bands
 USE_ALL_BANDS = True  # Use all 288 bands
@@ -99,7 +99,10 @@ USE_BRIGHTNESS_INDICES = True   # Brightness, greenness, wetness
 
 # Spatial features
 USE_SPATIAL_FEATURES = True
-SPATIAL_WINDOW_SIZE = 3  # 3x3 window for spatial statistics
+SPATIAL_WINDOW_SIZE = 3
+
+# Sidewalk-specific spectral features
+USE_PAVEMENT_SPECTRAL_SIGNATURE = True  # Use specialized features for sidewalk detection  # 3x3 window for spatial statistics
 USE_TEXTURE_FEATURES = False  # GLCM textures (computationally expensive)
 
 # Statistical features
@@ -167,13 +170,51 @@ USE_KAPPA_STATISTICS = True  # Cohen's kappa
 CONFIDENCE_LEVEL = 0.95
 
 # ============================================================================
-# SPECTRAL MASKING PARAMETERS
+# SPECTRAL MASKING PARAMETERS (Enhanced)
 # ============================================================================
 USE_SPECTRAL_MASKING = True  # Filter obvious non-pavement before training
+SPECTRAL_FILTERING_STRATEGY = 'moderate'  # Options: 'conservative', 'moderate', 'aggressive'
+
+# NDVI filtering
 NDVI_THRESHOLD = 0.3  # Filter pixels with NDVI >= this (vegetation)
+USE_NDVI_FILTER = True
+
+# Brightness filtering
 BRIGHTNESS_LOW_PERCENTILE = 5  # Filter bottom X% (shadows/water)
 BRIGHTNESS_HIGH_PERCENTILE = 99  # Filter top X% (bright roofs)
-SPECTRAL_VARIANCE_PERCENTILE = 90  # Filter top X% variance (non-uniform)
+USE_BRIGHTNESS_FILTER = True
+USE_PERCENTILE_BRIGHTNESS = True  # If False, use absolute thresholds
+BRIGHTNESS_LOW_ABSOLUTE = None  # Absolute low threshold (if not using percentile)
+BRIGHTNESS_HIGH_ABSOLUTE = None  # Absolute high threshold
+
+# Spectral variance filtering
+SPECTRAL_VARIANCE_PERCENTILE = 90  # Filter top X% variance
+USE_VARIANCE_FILTER = True
+USE_PERCENTILE_VARIANCE = True
+VARIANCE_ABSOLUTE_THRESHOLD = None
+
+# Minimum pixels to keep
+MIN_PIXELS_TO_KEEP = 0.01  # Keep at least 1% of pixels (safety check)
+AUTO_ADJUST_FILTERING = False  # Auto-adjust to conservative if too aggressive
+
+# Preset configurations for different scenarios
+SPECTRAL_FILTERING_PRESETS = {
+    'urban_dense': {
+        'strategy': 'aggressive',
+        'ndvi_threshold': 0.25,
+        'brightness_low_percentile': 10
+    },
+    'urban_sparse': {
+        'strategy': 'moderate',
+        'ndvi_threshold': 0.3,
+        'brightness_low_percentile': 5
+    },
+    'suburban': {
+        'strategy': 'conservative',
+        'ndvi_threshold': 0.35,
+        'brightness_low_percentile': 2
+    }
+}
 
 # ============================================================================
 # POST-PROCESSING PARAMETERS
@@ -190,6 +231,12 @@ USE_SIDEWALK_FILTERING = True  # Set to True to focus on sidewalks (narrow linea
 SIDEWALK_MIN_WIDTH = 1  # Minimum sidewalk width in pixels
 SIDEWALK_MAX_WIDTH = 8  # Maximum sidewalk width in pixels
 SIDEWALK_MIN_LENGTH = 10  # Minimum sidewalk length in pixels
+
+# SIDEWALK SIGNATURE MATCHING (Expand using Ground Truth)
+# ============================================================================
+USE_SIDEWALK_SIGNATURE_MATCHING = True  # Expand sidewalk detection using ground truth signatures
+SIDEWALK_SIMILARITY_THRESHOLD = 0.80  # Minimum cosine similarity to match (0-1) - lowered for more matches
+SIDEWALK_MAX_DISTANCE = 100  # Maximum distance from existing sidewalk to expand (pixels) - increased
 USE_ROAD_ADJACENCY = True  # Use road adjacency to identify sidewalks
 
 # ============================================================================
@@ -218,7 +265,7 @@ CLASSIFIER_COMPARISON_FILE = os.path.join(FIGURES_DIR, "classifier_comparison.pn
 PCA_VARIANCE_PLOT = os.path.join(FIGURES_DIR, "pca_variance_explained.png")
 CLASS_SEPARABILITY_PLOT = os.path.join(FIGURES_DIR, "class_separability.png")
 
-FIGURE_DPI = 300
+FIGURE_DPI = 400  # Higher DPI for better visualization quality
 
 # ============================================================================
 # COMPUTATIONAL PARAMETERS
@@ -250,6 +297,27 @@ LAND_COVER_BASE_DIR = "Land Cover Raster Data (2017) – 6in Resolution"
 LAND_COVER_PATH = os.path.join(LAND_COVER_BASE_DIR, "Land_Cover", "NYC_2017_LiDAR_LandCover.img")
 PAVEMENT_CLASSES = [6, 7]  # Class 6: Roads, Class 7: Other Impervious
 USE_KMEANS_AS_FALLBACK = False  # Set to True if land cover unavailable
+
+# ============================================================================
+# LIDAR ELEVATION DATA FOR HEIGHT-BASED FILTERING
+# ============================================================================
+# Use LiDAR elevation data for height-based filtering
+USE_LIDAR_HEIGHT_FILTERING = True
+LIDAR_DIR = r"C:\Users\katha\Downloads\lidar"  # Path to directory containing .laz files
+HEIGHT_THRESHOLD_CM = 50.0  # Height difference threshold in centimeters (increased to 50cm for less aggressive filtering)
+# Pixels with height difference < threshold are considered similar (likely sidewalk)
+# Pixels with height difference > threshold are considered objects (fire hydrant, plant, etc.)
+# Note: Increased to 50cm to account for natural sidewalk variation and avoid over-filtering
+# Only remove obvious elevated objects (>50cm), not normal sidewalk texture variation
+USE_GROUND_LEVEL_FILTERING = True  # If True, compare to estimated ground level (DTM) to distinguish rooftops from sidewalks
+# Ground level mode: Rooftops are typically >5m above ground, sidewalks are at ground level
+# This is more effective than local neighborhood comparison for rooftop removal
+ROOFTOP_EXCLUSION_THRESHOLD_M = 5.0  # Exclude pixels more than this many meters above ground (rooftops) - increased to be less aggressive
+USE_LOCAL_VARIATION_FILTER = False  # Disable local variation check - too aggressive, removes legitimate sidewalks
+LIDAR_RASTERIZE_METHOD = 'mean'  # Method for rasterizing points: 'mean', 'min', 'max'
+USE_PERCENTILE_FILTERING = False  # If True, use percentile-based filtering instead of absolute threshold
+HEIGHT_PERCENTILE_THRESHOLD = 95  # Keep pixels below this percentile of height differences
+SAVE_PRE_FILTER_RESULTS = True  # Save classification map before LiDAR filtering for comparison
 
 # ============================================================================
 # RESEARCH METADATA

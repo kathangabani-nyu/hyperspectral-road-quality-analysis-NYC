@@ -239,7 +239,7 @@ def visualize_clusters(rgb_composite, cluster_map, n_clusters, filename=None):
 def visualize_classification_results(rgb_composite, ground_truth, prediction, 
                                      class_names=None, filename=None, ground_truth_source=None):
     """
-    Visualize classification results: RGB, ground truth, and prediction.
+    Visualize classification results: RGB, ground truth, prediction, and overlay.
     
     Parameters:
     -----------
@@ -260,37 +260,76 @@ def visualize_classification_results(rgb_composite, ground_truth, prediction,
     if class_names is None:
         class_names = ['Non-pavement', 'Pavement']
     
-    fig, axes = plt.subplots(1, 3, figsize=(24, 7))
+    # Calculate statistics
+    total_pixels = prediction.size
+    pred_pavement = prediction.sum()
+    gt_pavement = ground_truth.sum()
+    agreement = ((prediction == ground_truth) & (prediction == 1)).sum()
+    accuracy = (prediction == ground_truth).sum() / total_pixels * 100 if total_pixels > 0 else 0
     
-    # RGB composite
-    axes[0].imshow(rgb_composite)
-    axes[0].set_title('RGB Composite', fontsize=14, fontweight='bold')
-    axes[0].axis('off')
+    # Create figure with 4 subplots: RGB, Ground Truth, Prediction, Overlay
+    fig, axes = plt.subplots(2, 2, figsize=(24, 24))
     
-    # Ground truth
-    cmap = ListedColormap(['#d62728', '#2ca02c'])  # Red for non-pavement, green for pavement
-    im1 = axes[1].imshow(ground_truth, cmap=cmap, vmin=0, vmax=1)
+    # RGB composite - enhanced contrast
+    axes[0, 0].imshow(rgb_composite, interpolation='bilinear')
+    axes[0, 0].set_title('RGB Composite', fontsize=18, fontweight='bold', pad=10)
+    axes[0, 0].axis('off')
+    
+    # Ground truth - better colormap
+    cmap = ListedColormap(['#8B0000', '#00FF00'])  # Dark red for non-pavement, bright green for pavement
+    im1 = axes[0, 1].imshow(ground_truth, cmap=cmap, vmin=0, vmax=1, interpolation='nearest')
     if ground_truth_source:
-        gt_title = f'Ground Truth\n({ground_truth_source})'
+        gt_title = f'Ground Truth ({ground_truth_source})\n{gt_pavement:,} pixels ({100*gt_pavement/total_pixels:.1f}%)'
     else:
-        gt_title = 'Reference Labels\n(from K-means clustering)'
-    axes[1].set_title(gt_title, 
-                      fontsize=14, fontweight='bold')
-    axes[1].axis('off')
-    cbar1 = plt.colorbar(im1, ax=axes[1], fraction=0.046, pad=0.04, ticks=[0, 1])
-    cbar1.set_ticklabels(class_names)
+        gt_title = f'Reference Labels (K-means)\n{gt_pavement:,} pixels ({100*gt_pavement/total_pixels:.1f}%)'
+    axes[0, 1].set_title(gt_title, fontsize=18, fontweight='bold', pad=10)
+    axes[0, 1].axis('off')
+    cbar1 = plt.colorbar(im1, ax=axes[0, 1], fraction=0.046, pad=0.04, ticks=[0, 1])
+    cbar1.set_ticklabels(class_names, fontsize=14, fontweight='bold')
+    cbar1.ax.tick_params(labelsize=14)
     
-    # Prediction
-    im2 = axes[2].imshow(prediction, cmap=cmap, vmin=0, vmax=1)
-    axes[2].set_title('Classification Result\n(Random Forest)', 
-                      fontsize=14, fontweight='bold')
-    axes[2].axis('off')
-    cbar2 = plt.colorbar(im2, ax=axes[2], fraction=0.046, pad=0.04, ticks=[0, 1])
-    cbar2.set_ticklabels(class_names)
+    # Prediction - better colormap
+    im2 = axes[1, 0].imshow(prediction, cmap=cmap, vmin=0, vmax=1, interpolation='nearest')
+    axes[1, 0].set_title(f'Classification Result (Random Forest)\n{pred_pavement:,} pixels ({100*pred_pavement/total_pixels:.1f}%)', 
+                      fontsize=18, fontweight='bold', pad=10)
+    axes[1, 0].axis('off')
+    cbar2 = plt.colorbar(im2, ax=axes[1, 0], fraction=0.046, pad=0.04, ticks=[0, 1])
+    cbar2.set_ticklabels(class_names, fontsize=14, fontweight='bold')
+    cbar2.ax.tick_params(labelsize=14)
     
-    plt.tight_layout()
+    # Overlay: RGB with prediction overlay (better visualization)
+    overlay = rgb_composite.copy()
+    # Create semi-transparent green overlay for pavement predictions
+    overlay_mask = prediction.astype(bool)
+    # Use alpha blending for better visibility
+    green_overlay = np.zeros_like(overlay)
+    green_overlay[overlay_mask] = [0.0, 1.0, 0.0]  # Pure green
+    alpha = 0.4  # Transparency
+    overlay = overlay * (1 - alpha * overlay_mask[..., np.newaxis]) + green_overlay * (alpha * overlay_mask[..., np.newaxis])
+    overlay = np.clip(overlay, 0, 1)
+    axes[1, 1].imshow(overlay, interpolation='bilinear')
+    axes[1, 1].set_title(f'RGB with Classification Overlay\nAgreement: {agreement:,} pixels | Accuracy: {accuracy:.1f}%', 
+                         fontsize=18, fontweight='bold', pad=10)
+    axes[1, 1].axis('off')
+    
+    # Add statistics text box
+    stats_text = f'Statistics:\n'
+    stats_text += f'Total pixels: {total_pixels:,}\n'
+    stats_text += f'Predicted pavement: {pred_pavement:,} ({100*pred_pavement/total_pixels:.2f}%)\n'
+    stats_text += f'Ground truth pavement: {gt_pavement:,} ({100*gt_pavement/total_pixels:.2f}%)\n'
+    stats_text += f'Agreement: {agreement:,} pixels\n'
+    stats_text += f'Overall accuracy: {accuracy:.2f}%'
+    
+    fig.text(0.5, 0.02, stats_text, ha='center', fontsize=12, 
+             bbox=dict(boxstyle='round', facecolor='wheat', alpha=0.5))
+    
+    plt.tight_layout(rect=[0, 0.05, 1, 0.98])
     try:
-        plt.savefig(filename, dpi=config.FIGURE_DPI, bbox_inches='tight')
+        # Use higher DPI for better quality
+        save_dpi = getattr(config, 'FIGURE_DPI', 300)
+        if save_dpi < 300:
+            save_dpi = 300  # Minimum 300 DPI for quality
+        plt.savefig(filename, dpi=save_dpi, bbox_inches='tight', facecolor='white', edgecolor='none')
         plt.close()
         
         # Verify file was created

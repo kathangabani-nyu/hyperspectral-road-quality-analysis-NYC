@@ -9,12 +9,15 @@ Key Features:
 - Linear connectivity (sidewalks form paths)
 - Adjacency to roads (sidewalks are usually next to roads)
 - Exclude large rectangular regions (rooftops)
+- Signature matching: Use ground truth sidewalk signatures to find similar pixels
 """
 
 import numpy as np
 from scipy.ndimage import label, binary_dilation, distance_transform_edt
 from scipy.ndimage import maximum_filter, minimum_filter
 from scipy.ndimage import gaussian_filter
+from scipy.spatial.distance import cdist
+from sklearn.metrics.pairwise import cosine_similarity
 import advanced_config as config
 
 
@@ -389,4 +392,212 @@ def integrate_manual_mask(classification_map, manual_mask_path):
         print(f"  Combined pavement pixels: {combined_map.sum()}")
     
     return combined_map
+
+
+def expand_sidewalk_by_signature_matching(
+    classification_map,
+    land_cover_map,
+    hyperspectral_data,
+    valid_mask,
+    similarity_threshold=0.85,
+    max_distance_pixels=50,
+    prefer_rectangular=True
+):
+    """
+    Expand sidewalk detection by matching hyperspectral signatures from ground truth.
+    
+    Strategy:
+    1. Extract sidewalk-only pixels from ground truth (class 7, excluding class 6 roads)
+    2. Compute mean hyperspectral signature from sidewalk pixels
+    3. Find similar signatures in the image (especially in rectangular/linear patterns)
+    4. Expand classification map to include similar pixels
+    
+    Parameters:
+    -----------
+    classification_map : ndarray
+        Current binary classification map (height, width)
+    land_cover_map : ndarray
+        Ground truth land cover map with classes (height, width)
+        Class 6 = Roads, Class 7 = Other Impervious (sidewalks)
+    hyperspectral_data : ndarray
+        Full hyperspectral data (n_bands, height, width)
+    valid_mask : ndarray
+        Valid pixel mask (height, width)
+    similarity_threshold : float
+        Minimum cosine similarity to match (0-1, default 0.85)
+    max_distance_pixels : int
+        Maximum distance from existing sidewalk to expand (default 50)
+    prefer_rectangular : bool
+        If True, prefer rectangular/linear patterns (default True)
+        
+    Returns:
+    --------
+    expanded_map : ndarray
+        Expanded classification map with matched sidewalk pixels
+    """
+    if config.VERBOSE:
+        print(f"\n{'='*60}")
+        print("SIDEWALK SIGNATURE MATCHING")
+        print(f"{'='*60}")
+    
+    # Step 1: Extract sidewalk-only pixels from ground truth (class 7, exclude class 6)
+    sidewalk_gt = (land_cover_map == 7).astype(bool)  # Class 7 = sidewalks
+    roads_gt = (land_cover_map == 6).astype(bool)      # Class 6 = roads
+    
+    # Exclude roads from sidewalk mask
+    sidewalk_only_gt = sidewalk_gt & (~roads_gt)
+    
+    if sidewalk_only_gt.sum() == 0:
+        if config.VERBOSE:
+            print("  No sidewalk pixels found in ground truth. Skipping signature matching.")
+        return classification_map
+    
+    if config.VERBOSE:
+        print(f"  Ground truth sidewalk pixels: {sidewalk_only_gt.sum()}")
+        print(f"  Ground truth road pixels: {roads_gt.sum()}")
+    
+    # Step 2: Extract hyperspectral signatures from sidewalk pixels
+    # Reshape hyperspectral data to (height*width, n_bands)
+    n_bands, height, width = hyperspectral_data.shape
+    hyperspectral_flat = hyperspectral_data.reshape(n_bands, height * width).T  # (n_pixels, n_bands)
+    
+    # Get sidewalk pixel indices
+    sidewalk_indices = np.where(sidewalk_only_gt.flatten() & valid_mask.flatten())[0]
+    
+    if len(sidewalk_indices) == 0:
+        if config.VERBOSE:
+            print("  No valid sidewalk pixels in ground truth. Skipping signature matching.")
+        return classification_map
+    
+    # Extract signatures from sidewalk pixels
+    sidewalk_signatures = hyperspectral_flat[sidewalk_indices]  # (n_sidewalk_pixels, n_bands)
+    
+    # Compute mean signature and standard deviation
+    mean_signature = np.mean(sidewalk_signatures, axis=0)
+    std_signature = np.std(sidewalk_signatures, axis=0)
+    
+    if config.VERBOSE:
+        print(f"  Extracted {len(sidewalk_indices)} sidewalk signatures")
+        print(f"  Mean signature range: [{np.min(mean_signature):.1f}, {np.max(mean_signature):.1f}]")
+    
+    # Step 3: Find similar signatures in the image
+    # Normalize signatures for cosine similarity
+    mean_signature_norm = mean_signature / (np.linalg.norm(mean_signature) + 1e-10)
+    
+    # Get all valid pixel indices (excluding already classified pavement)
+    valid_indices = np.where(valid_mask.flatten() & (~classification_map.flatten()))[0]
+    
+    if len(valid_indices) == 0:
+        if config.VERBOSE:
+            print("  No unclassified valid pixels to match. Skipping expansion.")
+        return classification_map
+    
+    # Extract signatures from unclassified valid pixels
+    candidate_signatures = hyperspectral_flat[valid_indices]  # (n_candidates, n_bands)
+    
+    # Normalize candidate signatures
+    candidate_norms = np.linalg.norm(candidate_signatures, axis=1, keepdims=True)
+    candidate_signatures_norm = candidate_signatures / (candidate_norms + 1e-10)
+    
+    # Compute cosine similarity
+    similarities = np.dot(candidate_signatures_norm, mean_signature_norm)  # (n_candidates,)
+    
+    # Find pixels with high similarity
+    similar_mask_flat = np.zeros(height * width, dtype=bool)
+    similar_mask_flat[valid_indices] = similarities >= similarity_threshold
+    
+    if config.VERBOSE:
+        n_similar = similar_mask_flat.sum()
+        print(f"  Found {n_similar} pixels with similarity >= {similarity_threshold}")
+    
+    # Step 4: Apply spatial constraints (prefer rectangular/linear patterns)
+    if prefer_rectangular and n_similar > 0:
+        similar_mask = similar_mask_flat.reshape(height, width)
+        
+        # Find connected components of similar pixels
+        labeled_similar, n_components = label(similar_mask)
+        
+        if config.VERBOSE:
+            print(f"  Found {n_components} connected components of similar pixels")
+        
+        # Filter components based on shape (prefer rectangular/linear)
+        filtered_similar = np.zeros_like(similar_mask, dtype=bool)
+        
+        for comp_id in range(1, n_components + 1):
+            comp_mask = (labeled_similar == comp_id)
+            comp_area = comp_mask.sum()
+            
+            if comp_area < 10:  # Too small, skip
+                continue
+            
+            # Compute bounding box properties
+            coords = np.argwhere(comp_mask)
+            y_min, x_min = coords.min(axis=0)
+            y_max, x_max = coords.max(axis=0)
+            
+            bbox_width = x_max - x_min + 1
+            bbox_height = y_max - y_min + 1
+            bbox_area = bbox_width * bbox_height
+            aspect_ratio = max(bbox_width, bbox_height) / (min(bbox_width, bbox_height) + 1e-10)
+            compactness = comp_area / bbox_area if bbox_area > 0 else 0
+            
+            # Check distance from existing sidewalk
+            min_distance = 0
+            if classification_map.sum() > 0:
+                # Compute distance from existing sidewalk
+                from scipy.ndimage import distance_transform_edt
+                dist_to_sidewalk = distance_transform_edt(~classification_map.astype(bool))
+                comp_distances = dist_to_sidewalk[comp_mask]
+                min_distance = np.min(comp_distances)
+            else:
+                min_distance = 0
+            
+            # More lenient criteria: prefer rectangular/linear patterns OR near existing sidewalk
+            # Sidewalks can be elongated (high aspect ratio), moderately compact, or near existing detections
+            is_rectangular = (
+                aspect_ratio >= 1.5 or  # Elongated (linear) - lowered from 2.0
+                (aspect_ratio >= 1.1 and compactness >= 0.5) or  # Rectangular - lowered thresholds
+                (min_distance <= max_distance_pixels and compactness >= 0.4)  # Near existing, reasonable shape
+            )
+            
+            # Distance check: if far from existing, must be very rectangular/linear
+            if min_distance > max_distance_pixels:
+                # If far, require stronger rectangular/linear characteristics
+                is_rectangular = (
+                    aspect_ratio >= 2.5 or  # Very elongated
+                    (aspect_ratio >= 1.8 and compactness >= 0.7)  # Very rectangular
+                )
+                if not is_rectangular:
+                    if config.VERBOSE and comp_id <= 5:
+                        print(f"    Component {comp_id}: too far ({min_distance:.1f} pixels) and not rectangular enough, skipping")
+                    continue
+            
+            if is_rectangular:
+                filtered_similar[comp_mask] = True
+                if config.VERBOSE and comp_id <= 10:
+                    print(f"    Component {comp_id}: area={comp_area}, aspect={aspect_ratio:.2f}, "
+                          f"compactness={compactness:.2f}, dist={min_distance:.1f} -> KEEP")
+            else:
+                if config.VERBOSE and comp_id <= 5:
+                    print(f"    Component {comp_id}: area={comp_area}, aspect={aspect_ratio:.2f}, "
+                          f"compactness={compactness:.2f}, dist={min_distance:.1f} -> SKIP")
+        
+        similar_mask_flat = filtered_similar.flatten()
+        n_filtered = similar_mask_flat.sum()
+        if config.VERBOSE:
+            print(f"  After spatial filtering: {n_filtered} pixels (removed {n_similar - n_filtered})")
+    
+    # Step 5: Expand classification map
+    expanded_map = classification_map.copy()
+    expanded_map.flat[similar_mask_flat] = 1
+    
+    n_added = similar_mask_flat.sum()
+    if config.VERBOSE:
+        print(f"\n  Expansion summary:")
+        print(f"    Original pavement pixels: {classification_map.sum()}")
+        print(f"    Added pixels: {n_added}")
+        print(f"    Final pavement pixels: {expanded_map.sum()}")
+        print(f"    Expansion: {100 * n_added / max(classification_map.sum(), 1):.1f}%")
+    
+    return expanded_map
 

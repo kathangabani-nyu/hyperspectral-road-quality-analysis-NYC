@@ -137,6 +137,96 @@ def compute_absorption_depth(X, band_idx=50, window=5):
     return depth.reshape(-1, 1)
 
 
+def compute_concrete_index(X, visible_idx=50, nir_idx=70):
+    """
+    Concrete Index - distinguishes concrete from other materials.
+    Concrete typically has: high visible reflectance, moderate NIR.
+    CI = (Visible - NIR) / (Visible + NIR)
+    """
+    if max(visible_idx, nir_idx) >= X.shape[1]:
+        return np.zeros(X.shape[0])
+    
+    visible = X[:, visible_idx]
+    nir = X[:, nir_idx]
+    denominator = visible + nir + 1e-10
+    ci = (visible - nir) / denominator
+    return ci.reshape(-1, 1)
+
+
+def compute_asphalt_index(X, red_idx=50, swir_idx=150):
+    """
+    Asphalt Index - distinguishes asphalt from other materials.
+    Asphalt typically has: low overall reflectance, specific red/SWIR ratio.
+    AI = (Red - SWIR) / (Red + SWIR)
+    If SWIR not available, uses NIR instead.
+    """
+    if red_idx >= X.shape[1]:
+        return np.zeros(X.shape[0])
+    
+    red = X[:, red_idx]
+    # Use SWIR if available, otherwise use a band in SWIR range
+    if swir_idx >= X.shape[1]:
+        # Use last band as proxy for SWIR
+        swir_idx = X.shape[1] - 1
+    
+    swir = X[:, swir_idx]
+    denominator = red + swir + 1e-10
+    ai = (red - swir) / denominator
+    return ai.reshape(-1, 1)
+
+
+def compute_pavement_spectral_signature(X, red_idx=50, nir_idx=70, swir_idx=150):
+    """
+    Compute comprehensive pavement (sidewalk) spectral signature features.
+    
+    Sidewalks (concrete/asphalt) have distinct characteristics:
+    - Low NDVI (not vegetation)
+    - Moderate brightness (not shadow, not extreme)
+    - Specific band ratios
+    - Low spectral variance (uniform surface)
+    - Specific absorption features
+    
+    Returns multiple features that help identify sidewalks.
+    """
+    features = []
+    
+    # 1. NDVI (should be low for pavement)
+    ndvi = compute_ndvi(X, red_idx, nir_idx)
+    features.append(ndvi)
+    
+    # 2. Brightness (mean reflectance)
+    brightness = compute_brightness(X)
+    features.append(brightness)
+    
+    # 3. Spectral variance (should be low for uniform pavement)
+    spectral_std = X.std(axis=1).reshape(-1, 1)
+    features.append(spectral_std)
+    
+    # 4. Concrete index
+    ci = compute_concrete_index(X, visible_idx=red_idx, nir_idx=nir_idx)
+    features.append(ci)
+    
+    # 5. Asphalt index (if SWIR available)
+    if swir_idx < X.shape[1]:
+        ai = compute_asphalt_index(X, red_idx=red_idx, swir_idx=swir_idx)
+        features.append(ai)
+    
+    # 6. Visible/NIR ratio (pavement has specific ratio)
+    if nir_idx < X.shape[1] and red_idx < X.shape[1]:
+        visible_nir_ratio = (X[:, red_idx] / (X[:, nir_idx] + 1e-10)).reshape(-1, 1)
+        features.append(visible_nir_ratio)
+    
+    # 7. Spectral slope (overall trend)
+    slope = compute_spectral_slope(X)
+    features.append(slope)
+    
+    # 8. Coefficient of variation (uniformity measure)
+    cv = (X.std(axis=1) / (X.mean(axis=1) + 1e-10)).reshape(-1, 1)
+    features.append(cv)
+    
+    return np.hstack(features)
+
+
 # ============================================================================
 # STATISTICAL FEATURES
 # ============================================================================
@@ -324,6 +414,23 @@ def extract_advanced_features(X, data_3d=None):
             
             features.append(compute_absorption_depth(X, red_idx))
             feature_names.append('Absorption_Depth')
+        
+        # Sidewalk-specific spectral signature features
+        if getattr(config, 'USE_PAVEMENT_SPECTRAL_SIGNATURE', True):
+            if config.VERBOSE:
+                print("\nComputing sidewalk-specific spectral signature...")
+            pavement_features = compute_pavement_spectral_signature(X, red_idx, nir_idx, swir_idx)
+            features.append(pavement_features)
+            # Add feature names for pavement signature
+            pavement_feature_names = ['NDVI_pavement', 'Brightness_pavement', 'Spectral_Std_pavement', 
+                                     'Concrete_Index', 'Asphalt_Index', 'Visible_NIR_Ratio', 
+                                     'Spectral_Slope_pavement', 'CV_pavement']
+            # Adjust if SWIR not available
+            if swir_idx >= n_bands:
+                pavement_feature_names = pavement_feature_names[:4] + pavement_feature_names[5:]
+            feature_names.extend(pavement_feature_names[:pavement_features.shape[1]])
+            if config.VERBOSE:
+                print(f"Added {pavement_features.shape[1]} sidewalk-specific spectral features")
         
         if config.VERBOSE:
             print(f"Added {len(feature_names) - X.shape[1]} spectral indices")

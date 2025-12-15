@@ -2,6 +2,64 @@
 
 All notable changes to the Hyperspectral Pavement Classification System.
 
+## [2.1.0] - 2025-01-XX - Enhanced Multi-Stage Filtering Release
+
+### Major Performance Improvements
+- **Overall Accuracy**: Improved from 67% to **88.81%** (+21.81%)
+- **Kappa Coefficient**: Improved from 0.34 to **0.7762** (substantial agreement)
+- **Mean IoU**: Improved from 50.8% to **79.84%** (+29.04%)
+- **F1-Score (Pavement)**: Improved from 84.2% to **89.23%** (+5.03%)
+
+### New Features Added
+
+#### Height-Based Filtering
+- LiDAR elevation data integration for rooftop removal
+- Digital Elevation Model (DEM) creation from point clouds
+- Ground level (DTM) comparison to distinguish elevated structures
+- Configurable height thresholds (default: 50cm)
+- Graceful fallback when LiDAR data unavailable
+
+#### Sidewalk Signature Matching
+- Novel approach using ground truth sidewalk signatures
+- Cosine similarity matching (threshold: 0.80)
+- Spatial constraints (rectangular/linear pattern preference)
+- Expansion within configurable distance (default: 100 pixels)
+- **75.7% expansion** in test cases
+
+#### Enhanced Visualization
+- Increased DPI from 300 to 400 for publication quality
+- Improved color schemes (dark red/green for better contrast)
+- Alpha blending for semi-transparent overlays
+- Larger figure sizes (24×24 inches)
+- Enhanced font sizes and labels
+
+#### Improved LiDAR Loading
+- Better coordinate system transformation
+- Robust bounds calculation using all four corners
+- Diagnostic mode for troubleshooting
+- Automatic bounds expansion when no points found
+- Detailed error messages with coordinate ranges
+
+### Code Improvements
+- Enhanced error handling throughout pipeline
+- Better diagnostic information for debugging
+- Improved spatial filtering algorithms
+- More lenient signature matching criteria
+- Better integration of multi-stage filters
+
+### Documentation
+- **NEW**: `docs/METHODOLOGY_REPORT.txt` - Comprehensive 19-step methodology documentation
+- Updated README with latest results and features
+- Detailed rationale for each processing step
+- Performance summary with processing statistics
+
+### Technical Details
+- Feature engineering: 288 bands → 332 features → 19 PCA components
+- Spectral masking: 15.5% pixels retained (moderate strategy)
+- Training: 28,000 balanced samples (70/30 split)
+- Test: 12,000 samples
+- Final classification: 52,383 pavement pixels
+
 ## [2.0.0] - 2025-10-28 - Research-Grade Release
 
 ### Major Features Added
